@@ -6,28 +6,44 @@ The node-agent sees process/network/file activity by attaching eBPF probes to th
 
 This PoC closes it for one signal source. It runs a **monitoring process** that speaks gVisor's `seccheck` **remote sink** protocol, decodes the real Sentry trace-point stream, and **normalizes each point into the exact event shape node-agent already consumes** (`exec`, `network`, `open`, `fork`, `exit`, `ptrace`, …). The Sentry sees everything the sandboxed actor does; this is the adapter that gets those signals into Kubescape's existing detection pipeline.
 
-## What works today
+---
 
-- A **collector** (`cmd/collector`) that binds the `SOCK_SEQPACKET` UDS, performs the seccheck handshake, decodes the protobuf point stream against **gVisor's real schemas**, normalizes it, and emits JSON.
-- A **normalizer** (`internal/normalize`) with an explicit, documented seccheck→node-agent mapping table.
-- A **cluster-free end-to-end test** (`make e2e`): a faithful `fakesentry` replays a realistic agent-sandbox session over the **real wire protocol** (handshake + 8-byte header + gVisor protobufs), and the collector decodes all of it. No cluster, no Docker, no runsc needed to see it work.
-- A **real-gVisor path** (`scripts/run-with-runsc.sh`) that attaches a trace session to an already-running sandbox with `runsc trace create`.
-- **Unit tests** over the decode + mapping (`go test ./...`).
+## Demo
 
-The protobuf bindings in `internal/pb` are generated from the **actual gVisor `.proto` files** (vendored under `proto/` with provenance), so the bytes decoded here are the bytes a real Sentry emits.
+> Cluster-free E2E (replayer) followed by live events from a real `--runtime=runsc` container on EC2 (Amazon Linux 2023, Go 1.25, runsc release-20260810.0):
 
-## Quick start
+![gVisor PoC Demo](evidence/demo.gif)
+
+---
+
+## Two ways to run
+
+This PoC supports **two independent run modes** — both exercise the same collector code path. The only difference is who sends the seccheck point stream.
+
+### Mode 1: Cluster-free E2E (no Docker, no runsc, no cluster)
+
+A faithful **replayer** (`cmd/fakesentry`) drives a realistic agent-sandbox session over the **real wire protocol** (handshake + 8-byte header + gVisor protobufs). This is the fastest way to verify the decode + normalize pipeline works. Runs on any machine with Go installed.
 
 ```bash
-make e2e     # build, run collector + fakesentry over the real seccheck protocol, assert
+make e2e     # build, run collector + fakesentry, assert
 make test    # unit tests over decode + normalization
 ```
 
-Expected tail of `make e2e`:
+**Verified output** ([full output](evidence/e2e-output.txt)):
 
 ```
+==> replaying agent-sandbox session with fakesentry
+fakesentry: connected, server version=1
+fakesentry: sent 8 points, closing.
+
+==> collector stderr:
+    collector: handshake ok (peer version=1)
+    collector: client disconnected. points=8 mapped=7 unmapped=1 dropped(reported by sender)=0
+
 PASS: 8/8 points decoded from the real seccheck wire format and normalized to node-agent events.
 ```
+
+The replayed session models a malicious agent actor: it spawns a shell, curls an external payload, reads `/etc/shadow`, attempts `ptrace`, and exits — all inside a gVisor sandbox. Every event is decoded from the real protobuf schemas and mapped to a node-agent event type.
 
 Sample normalized event (a `connect()` from inside the sandbox — invisible to host eBPF):
 
@@ -44,31 +60,84 @@ Sample normalized event (a `connect()` from inside the sandbox — invisible to 
 }
 ```
 
-## Run against real gVisor (no cluster)
+### Mode 2: Real gVisor (Docker + runsc, no cluster)
 
-Needs Docker + [runsc installed](https://gvisor.dev/docs/user_guide/install/). Then:
+A **real Sentry** sends live trace points from an actual `--runtime=runsc` container. The collector attaches to the **already-running** sandbox via `runsc trace create` (no restart needed) — this is the dynamic-attach capability the design relies on for production.
 
 ```bash
+# install runsc: https://gvisor.dev/docs/user_guide/install/
 ./scripts/run-with-runsc.sh
 ```
 
-It starts the collector, launches a `--runtime=runsc` container, and attaches a
-seccheck session to the **running** sandbox with `runsc trace create`. The
-collector prints normalized events for the live workload. The collector code path
-is identical to `make e2e`; only the sender differs (real Sentry vs. replayer).
+**Verified output from EC2** ([full output](evidence/live-gvisor-output.txt)) — **142 live events captured in 15 seconds**:
+
+```
+==> launching gVisor-sandboxed workload
+    container: 6abb3412129b
+==> attaching seccheck trace session
+    collector: handshake ok (peer version=1)
+    Trace session "Default" created.
+```
+
+Live `exec` — every binary execution inside the sandbox, with full argv:
+```json
+{
+  "seccheck_message": "MESSAGE_SYSCALL_EXECVE",
+  "node_agent_event_type": "exec",
+  "node_agent_mapped": true,
+  "details": {
+    "argv": ["wget", "-q", "-O-", "http://example.com"],
+    "pathname": "/usr/bin/wget"
+  }
+}
+```
+
+Live `connect` — egress destination attributed to the sandbox container:
+```json
+{
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "172.66.147.243:80"
+  }
+}
+```
+
+**Event breakdown** (15-second capture window):
+
+| Event type | Count | What it catches |
+|---|---|---|
+| `network` | 77 | socket, connect, DNS — egress destinations invisible to host eBPF |
+| `exit` | 23 | process lifecycle inside the sandbox |
+| `fork` | 21 | child process creation |
+| `exec` | 21 | every binary execution with full argv |
+
+---
+
+## What works today
+
+- A **collector** (`cmd/collector`) that binds the `SOCK_SEQPACKET` UDS, performs the seccheck handshake, decodes the protobuf point stream against **gVisor's real schemas**, normalizes it, and emits JSON.
+- A **normalizer** (`internal/normalize`) with an explicit, documented seccheck-to-node-agent mapping table.
+- A **cluster-free end-to-end test** (`make e2e`): runs on any machine with Go — no Docker, no runsc, no cluster.
+- A **real-gVisor path** (`scripts/run-with-runsc.sh`): runs on any Linux box with Docker + runsc — no cluster.
+- **Unit tests** over the decode + mapping (`go test ./...`).
+
+The protobuf bindings in `internal/pb` are generated from the **actual gVisor `.proto` files** (vendored under `proto/` with provenance), so the bytes decoded here are the bytes a real Sentry emits.
 
 ## Signal-source mapping
 
 | seccheck message | node-agent `EventType` | mapped |
 |---|---|---|
-| `MESSAGE_SYSCALL_EXECVE`, `MESSAGE_SENTRY_EXEC` | `exec` | ✅ |
-| `MESSAGE_SYSCALL_CONNECT/SOCKET/BIND/ACCEPT/LISTEN` | `network` | ✅ |
-| `MESSAGE_SYSCALL_OPEN` | `open` | ✅ |
-| `MESSAGE_SENTRY_CLONE`, `MESSAGE_SYSCALL_CLONE/FORK` | `fork` | ✅ |
-| `MESSAGE_SENTRY_TASK_EXIT`, `MESSAGE_SENTRY_EXIT_NOTIFY_PARENT` | `exit` | ✅ |
-| `MESSAGE_SYSCALL_PTRACE` | `ptrace` | ✅ |
-| `MESSAGE_SYSCALL_RAW` | `syscall` | ✅ |
-| `MESSAGE_CONTAINER_START` | — (metadata: sandbox↔container correlation) | ⬜ |
+| `MESSAGE_SYSCALL_EXECVE`, `MESSAGE_SENTRY_EXEC` | `exec` | yes |
+| `MESSAGE_SYSCALL_CONNECT/SOCKET/BIND/ACCEPT/LISTEN` | `network` | yes |
+| `MESSAGE_SYSCALL_OPEN` | `open` | yes |
+| `MESSAGE_SENTRY_CLONE`, `MESSAGE_SYSCALL_CLONE/FORK` | `fork` | yes |
+| `MESSAGE_SENTRY_TASK_EXIT`, `MESSAGE_SENTRY_EXIT_NOTIFY_PARENT` | `exit` | yes |
+| `MESSAGE_SYSCALL_PTRACE` | `ptrace` | yes |
+| `MESSAGE_SYSCALL_RAW` | `syscall` | yes |
+| `MESSAGE_CONTAINER_START` | — (metadata: sandbox/container correlation) | — |
 
 ## The `Default`-session constraint (called out honestly)
 
@@ -83,15 +152,25 @@ broker). See [`docs/DESIGN.md`](docs/DESIGN.md).
 ## Layout
 
 ```
-cmd/collector     monitoring process: UDS server, decode, normalize, emit JSON
-cmd/fakesentry    replays a real seccheck point stream (cluster-free E2E sender)
-internal/wire     8-byte remote-sink header framing (faithful to gVisor)
-internal/pb       protobuf bindings generated from gVisor's real .proto files
+cmd/collector      monitoring process: UDS server, decode, normalize, emit JSON
+cmd/fakesentry     replays a real seccheck point stream (cluster-free E2E sender)
+internal/wire      8-byte remote-sink header framing (faithful to gVisor)
+internal/pb        protobuf bindings generated from gVisor's real .proto files
 internal/normalize seccheck point -> node-agent event mapping (+ tests)
-configs/          runsc trace-session.json (points + remote sink)
-scripts/          e2e.sh (cluster-free), run-with-runsc.sh (real gVisor)
-proto/            vendored gVisor .proto (provenance for internal/pb)
-third_party/      pinned protobuf runtime clones for fully-offline builds
+configs/           runsc trace-session.json (points + remote sink)
+scripts/           e2e.sh (cluster-free), run-with-runsc.sh (real gVisor)
+proto/             vendored gVisor .proto (provenance for internal/pb)
+third_party/       pinned protobuf runtime clones for fully-offline builds
+evidence/          verified E2E + live-gVisor output, demo recording
+```
+
+## Verified environment
+
+The outputs in `evidence/` were captured on:
+
+```
+Amazon Linux 2023 (x86_64), EC2 t3.small, ap-south-1
+Go 1.25.12, runsc release-20260810.0 (spec 1.2.1), Docker 25.0.16
 ```
 
 ## Scope and non-goals

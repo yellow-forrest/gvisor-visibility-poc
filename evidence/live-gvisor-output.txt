@@ -1,0 +1,202 @@
+==> starting collector
+collector: listening on /tmp/gvisor_events_live.sock (SOCK_SEQPACKET). Waiting for a Sentry to connect...
+==> launching gVisor-sandboxed workload
+    container: 6abb3412129b
+==> attaching seccheck trace session
+collector: handshake ok (peer version=1)
+Trace session "Default" created.
+==> capturing live events for 15 seconds...
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SENTRY_TASK_EXIT",
+  "node_agent_event_type": "exit",
+  "node_agent_mapped": true,
+  "details": {
+    "exit_status": 0
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SENTRY_CLONE",
+  "node_agent_event_type": "fork",
+  "node_agent_mapped": true,
+  "details": {
+    "created_thread_group_id": 8,
+    "created_thread_id": 8
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_EXECVE",
+  "node_agent_event_type": "exec",
+  "node_agent_mapped": true,
+  "details": {
+    "argv": [
+      "wget",
+      "-q",
+      "-O-",
+      "http://example.com"
+    ],
+    "envv_count": 0,
+    "pathname": "/usr/bin/wget"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 2,
+    "protocol": 0,
+    "type": 526338
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 10,
+    "protocol": 17,
+    "type": 524290
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "[2606:4700:10::ac42:93f3]:65535"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 10,
+    "protocol": 17,
+    "type": 524290
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "[2606:4700:10::6814:179a]:65535"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 2,
+    "protocol": 17,
+    "type": 524290
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "172.66.147.243:65535"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 2,
+    "protocol": 17,
+    "type": 524290
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "104.20.23.154:65535"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_SOCKET",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "domain": 2,
+    "protocol": 0,
+    "type": 1
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_CONNECT",
+  "node_agent_event_type": "network",
+  "node_agent_mapped": true,
+  "details": {
+    "fd": 3,
+    "remote": "172.66.147.243:80"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SENTRY_TASK_EXIT",
+  "node_agent_event_type": "exit",
+  "node_agent_mapped": true,
+  "details": {
+    "exit_status": 0
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SENTRY_CLONE",
+  "node_agent_event_type": "fork",
+  "node_agent_mapped": true,
+  "details": {
+    "created_thread_group_id": 9,
+    "created_thread_id": 9
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SYSCALL_EXECVE",
+  "node_agent_event_type": "exec",
+  "node_agent_mapped": true,
+  "details": {
+    "argv": [
+      "cat",
+      "/etc/hostname"
+    ],
+    "envv_count": 0,
+    "pathname": "/bin/cat"
+  }
+}
+{
+  "source": "gvisor/seccheck",
+  "seccheck_message": "MESSAGE_SENTRY_TASK_EXIT",
+  "node_agent_event_type": "exit",
+  "node_agent_mapped": true,
+  "details": {
+    "exit_status": 0
+  }
+
+... (142 total events captured in 15 seconds)

