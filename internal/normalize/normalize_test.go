@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/yashgupta/gvisor-visibility-poc/internal/pb"
+	pb "github.com/yellow-forrest/gvisor-visibility-poc/internal/pb"
 )
 
 // roundtrip marshals a real gVisor point proto and normalizes it exactly as the

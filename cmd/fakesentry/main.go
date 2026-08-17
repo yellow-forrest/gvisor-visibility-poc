@@ -30,8 +30,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/yashgupta/gvisor-visibility-poc/internal/pb"
-	"github.com/yashgupta/gvisor-visibility-poc/internal/wire"
+	pb "github.com/yellow-forrest/gvisor-visibility-poc/internal/pb"
+	"github.com/yellow-forrest/gvisor-visibility-poc/internal/wire"
 )
 
 const (

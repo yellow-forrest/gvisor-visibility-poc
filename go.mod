@@ -1,4 +1,4 @@
-module github.com/yashgupta/gvisor-visibility-poc
+module github.com/yellow-forrest/gvisor-visibility-poc
 
 go 1.24
 

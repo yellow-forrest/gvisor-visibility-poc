@@ -26,9 +26,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/yashgupta/gvisor-visibility-poc/internal/pb"
-	"github.com/yashgupta/gvisor-visibility-poc/internal/normalize"
-	"github.com/yashgupta/gvisor-visibility-poc/internal/wire"
+	pb "github.com/yellow-forrest/gvisor-visibility-poc/internal/pb"
+	"github.com/yellow-forrest/gvisor-visibility-poc/internal/normalize"
+	"github.com/yellow-forrest/gvisor-visibility-poc/internal/wire"
 )
 
 const maxMessageSize = 1 << 20 // 1 MiB, matches gVisor's server read buffer
