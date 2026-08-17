@@ -1,0 +1,41 @@
+{
+  "trace_session": {
+    "name": "Default",
+    "points": [
+      { "name": "container/start" },
+      { "name": "sentry/clone" },
+      { "name": "sentry/task_exit" },
+      {
+        "name": "syscall/execve/enter",
+        "context_fields": ["time", "container_id", "thread_id", "thread_group_id", "process_name", "cwd"]
+      },
+      {
+        "name": "syscall/socket/enter",
+        "context_fields": ["time", "container_id", "thread_id"]
+      },
+      {
+        "name": "syscall/connect/enter",
+        "context_fields": ["time", "container_id", "thread_id", "process_name"]
+      },
+      {
+        "name": "syscall/openat/enter",
+        "optional_fields": ["fd_path"],
+        "context_fields": ["time", "container_id", "thread_id", "process_name"]
+      },
+      {
+        "name": "syscall/ptrace/enter",
+        "context_fields": ["time", "container_id", "thread_id", "process_name"]
+      }
+    ],
+    "sinks": [
+      {
+        "name": "remote",
+        "config": {
+          "endpoint": "/tmp/gvisor_events.sock",
+          "retries": 3
+        },
+        "ignore_setup_error": false
+      }
+    ]
+  }
+}

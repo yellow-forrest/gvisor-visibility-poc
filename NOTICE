@@ -1,0 +1,17 @@
+gVisor runtime-visibility PoC for Kubescape node-agent
+======================================================
+
+This project includes material derived from the gVisor project
+(https://github.com/google/gvisor), licensed under the Apache License 2.0:
+
+  - proto/common.proto, proto/container.proto, proto/sentry.proto,
+    proto/syscall.proto
+      Copied from pkg/sentry/seccheck/points/ with import paths flattened and a
+      go_package option added. Used to generate internal/pb.
+  - internal/wire/wire.go
+      A faithful reimplementation of pkg/sentry/seccheck/sinks/remote/wire.
+
+third_party/ contains pinned, unmodified clones of the protobuf Go runtime
+(google.golang.org/protobuf), github.com/golang/protobuf, and
+github.com/google/go-cmp, vendored so the PoC builds without a module proxy.
+Each retains its own upstream LICENSE.
