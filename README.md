@@ -162,6 +162,7 @@ scripts/           e2e.sh (cluster-free), run-with-runsc.sh (real gVisor)
 proto/             vendored gVisor .proto (provenance for internal/pb)
 third_party/       pinned protobuf runtime clones for fully-offline builds
 evidence/          verified E2E + live-gVisor output, demo recording
+application/       LFX 2026 Term 3 application materials
 ```
 
 ## Verified environment
@@ -180,6 +181,20 @@ proves the pipe end to end and the node-agent event mapping. It is **not** a
 production node-agent integration: wiring the collector in as a node-agent
 `containerwatcher` tracer, DNS derivation from connect payloads, and the
 multi-sandbox sink broker are the natural next steps, sketched in the design doc.
+
+## LFX Mentorship 2026 Term 3 — Application
+
+This repo is part of my application for [kubescape/kubescape#2557](https://github.com/kubescape/kubescape/issues/2557) (CNCF LFX Mentorship, Sep-Nov 2026). All application materials are in [`application/`](application/):
+
+| Document | Description |
+|---|---|
+| [RFC: Agent-Runtime Security](application/RFC-agent-runtime-security.pdf) ([HTML](application/RFC-agent-runtime-security.html)) | Full design RFC covering posture scanning, admission control, and gVisor runtime visibility for agent-runtime CRDs |
+| [Cover Letter](application/cover-letter.pdf) | Why this project, why me, and what I'd bring to the mentorship |
+| [Resume](application/resume.pdf) | 6 years building endpoint agents, kernel-level instrumentation, eBPF tracing, and detection pipelines at cybersecurity companies |
+
+**Related PRs:**
+- [kubescape/designs-and-proposals#14](https://github.com/kubescape/designs-and-proposals/pull/14) — gVisor runtime visibility design proposal
+- [kubescape/regolibrary#789](https://github.com/kubescape/regolibrary/pull/789) — `AgentRuntimeHardening` framework (wires merged C-0297/C-0301 controls)
 
 ## Provenance / licensing
 

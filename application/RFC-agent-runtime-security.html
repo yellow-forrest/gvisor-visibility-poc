@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFC: Agent-Runtime Security for Kubescape — Posture, Admission, and gVisor Runtime Visibility</title>
+<style>
+:root{--ink:#1a1a1f;--muted:#5b5b66;--accent:#4a3aa7;--accent-soft:#eeecf8;
+--line:#e3e3ea;--bg:#ffffff;--wash:#f7f7fa;--code:#f4f3f9;--good:#1baf7a;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--wash);color:var(--ink);
+font:16px/1.65 "Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+-webkit-font-smoothing:antialiased}
+.page{max-width:980px;margin:0 auto;background:var(--bg);
+box-shadow:0 0 0 1px var(--line),0 18px 50px rgba(26,26,50,.08)}
+.band{background:linear-gradient(135deg,#3b2f8f 0%,#4a3aa7 55%,#2a78d6 100%);
+color:#fff;padding:40px 56px 34px}
+.band .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+opacity:.85;margin:0 0 10px;font-weight:600}
+.band h1{font-size:29px;line-height:1.3;margin:0;font-weight:700;letter-spacing:-.01em}
+.band .pills{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;
+font-weight:600;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35)}
+main{padding:34px 56px 56px}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:16px}
+main>h1{display:none}
+h2{font-size:22px;margin:42px 0 14px;padding-top:22px;border-top:1px solid var(--line);
+color:var(--accent);letter-spacing:-.01em}
+h2:first-of-type{border-top:none;padding-top:0;margin-top:8px}
+h3{font-size:17px;margin:26px 0 10px}
+p{margin:10px 0}
+a{color:#2a5bd7;text-decoration:none;border-bottom:1px solid #c9d6f5}
+a:hover{border-bottom-color:#2a5bd7}
+strong{color:#111}
+em{color:inherit}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+background:var(--code);border:1px solid #e6e2f4;border-radius:4px;padding:1px 5px;color:#3d3480}
+pre code{display:block;padding:12px 14px;overflow-x:auto}
+blockquote{margin:14px 0;padding:10px 18px;border-left:3px solid var(--accent);
+background:var(--accent-soft);border-radius:0 6px 6px 0;color:#3c3c46}
+ul,ol{padding-left:26px;margin:10px 0}
+li{margin:5px 0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.2px}
+th{background:var(--accent-soft);color:#332a72;text-align:left;font-weight:650;
+padding:8px 11px;border:1px solid #d9d4ee}
+td{padding:8px 11px;border:1px solid var(--line);vertical-align:top}
+tbody tr:nth-child(even){background:#fafafc}
+figure.diagram{margin:22px 0;padding:16px 14px 10px;border:1px solid var(--line);
+border-radius:10px;background:#fff}
+figure.diagram svg{display:block;width:100%;height:auto;max-width:100%}
+figure.diagram figcaption{text-align:center;font-size:12.5px;color:var(--muted);
+margin-top:8px}
+footer{padding:20px 56px 34px;color:var(--muted);font-size:12.5px;
+border-top:1px solid var(--line)}
+/* ToC */
+h2#table-of-contents + ol{columns:2;column-gap:44px;background:var(--wash);
+border:1px solid var(--line);border-radius:10px;padding:18px 22px 18px 44px;font-size:14.5px}
+h2#table-of-contents + ol li{break-inside:avoid}
+h2#table-of-contents + ol a{border-bottom:none;color:#2a5bd7}
+@media (max-width:760px){
+ .band{padding:28px 22px}.band h1{font-size:22px}
+ main{padding:24px 22px 40px}footer{padding:18px 22px 30px}
+ h2#table-of-contents + ol{columns:1}
+}
+@media print{
+ body{background:#fff}
+ .page{box-shadow:none;max-width:none}
+ .band{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ a{color:inherit;border-bottom:none}
+ h2{break-after:avoid}
+ figure.diagram,table{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="band">
+  <p class="kicker">Kubescape · LFX Mentorship 2026 Term 3 · Design RFC</p>
+  <h1>Agent-Runtime Security for Kubescape — Posture, Admission, and gVisor Runtime Visibility</h1>
+  <div class="pills">
+    <span class="pill">Status: Draft for discussion</span>
+    <span class="pill">Author: Yash Gupta (yellow-forrest)</span>
+    <span class="pill">Reviewers: @matthyx · @slashben</span>
+    <span class="pill">Last updated: 2026-08-18</span>
+  </div>
+</header>
+<main>
+<h1 id="rfc-agent-runtime-security-for-kubescape--posture-admission-and-gvisor-runtime-visibility">RFC: Agent-Runtime Security for Kubescape — Posture, Admission, and gVisor Runtime Visibility</h1>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td>Draft for discussion</td>
+</tr>
+<tr>
+<td><strong>Primary Author</strong></td>
+<td>Yash Gupta (<code>yellow-forrest</code>)</td>
+</tr>
+<tr>
+<td><strong>Collaborators</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Reviewers</strong></td>
+<td>@matthyx (Matthias Bertschy), @slashben (Ben Hirschberg) — Kubescape maintainers</td>
+</tr>
+<tr>
+<td><strong>Upstream tracking</strong></td>
+<td><a href="https://github.com/kubescape/kubescape/issues/2557" target="_blank" rel="noopener">kubescape/kubescape#2557</a> · design <a href="https://github.com/kubescape/designs-and-proposals/pull/10" target="_blank" rel="noopener">designs-and-proposals#10</a> · <a href="https://github.com/cncf/mentoring/issues/1991" target="_blank" rel="noopener">cncf/mentoring#1991</a> · this RFC upstream: <a href="https://github.com/kubescape/regolibrary/pull/789" target="_blank" rel="noopener">regolibrary#789</a>, <a href="https://github.com/kubescape/designs-and-proposals/pull/14" target="_blank" rel="noopener">designs-and-proposals#14</a></td>
+</tr>
+<tr>
+<td><strong>Companion PoC</strong></td>
+<td>gVisor seccheck collector — cluster-free E2E green (8/8 points), benchmarked (this doc)</td>
+</tr>
+<tr>
+<td><strong>Last updated</strong></td>
+<td>2026-08-18</td>
+</tr>
+</tbody>
+</table>
+<h3 id="approvers">Approvers</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>yes</th>
+<th>not yet</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@matthyx</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>@slashben</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#motivation">Motivation</a></li>
+<li><a href="#requirements">Requirements</a></li>
+<li><a href="#background">Background</a></li>
+<li><a href="#goals-and-non-goals">Goals and Non-Goals</a></li>
+<li><a href="#product--user-use-cases">Product &amp; User Use Cases</a></li>
+<li><a href="#gap-analysis">Gap Analysis — what is and isn't captured upstream</a></li>
+<li><a href="#competitive--vendor-landscape">Competitive &amp; Vendor Landscape — what security companies target</a></li>
+<li><a href="#design">Design</a></li>
+<li><a href="#benchmarks--performance">Benchmarks &amp; Performance</a></li>
+<li><a href="#resource--telemetry-cost-model">Resource &amp; Telemetry Cost Model</a></li>
+<li><a href="#timeline">Timeline</a></li>
+<li><a href="#dependencies">Dependencies</a></li>
+<li><a href="#alternatives-considered--prior-art">Alternatives Considered / Prior Art</a></li>
+<li><a href="#operations">Operations</a></li>
+<li><a href="#security--privacy--compliance">Security / Privacy / Compliance</a></li>
+<li><a href="#risks">Risks</a></li>
+<li><a href="#future-work">Future Work</a></li>
+<li><a href="#audit-log">Audit Log</a></li>
+<li><a href="#references">References</a></li>
+</ol>
+<hr>
+<h2 id="overview">Overview</h2>
+<p><em>TLDR.</em> GKE Agent Sandbox went GA in May 2026 and, with Agent Substrate, pushes the
+security-relevant configuration of AI agents into new custom resources
+(<code>Sandbox</code>/<code>SandboxTemplate</code> under <code>agents.x-k8s.io</code>; <code>WorkerPool</code>/<code>ActorTemplate</code>
+under <code>ate.dev</code>) that live outside the workloads Kubescape scans today. This RFC
+proposes two complementary workstreams:</p>
+<ul>
+<li>
+<p><strong>Part A — static posture + admission.</strong> A new <em>Agent Runtime Hardening</em> Rego
+  framework that treats the agent CRDs as first-class scan targets (isolation class,
+  default-deny egress, per-actor resource ceilings, image provenance, per-session
+  credential scoping, snapshot encryption), surfaced through the existing CLI /
+  operator / MCP paths and an admission (VAP) variant, mapped to OWASP-LLM-2025 and
+  MITRE ATLAS. This rides entirely on capability Kubescape already has.</p>
+</li>
+<li>
+<p><strong>Part B — runtime visibility.</strong> A node-agent sensor that closes the gVisor
+  blind spot: because a gVisor actor's syscalls are serviced by the userspace Sentry
+  and never reach the host kernel, the node-agent's host-eBPF probes cannot see
+  inside the sandbox. A <strong>working proof-of-concept</strong> already speaks gVisor's
+  <code>seccheck</code> remote-sink protocol, decodes the real trace-point stream, and
+  normalizes each point into the node-agent event shape the detection engine already
+  consumes — so existing runtime rules fire on sandboxed actors unchanged.</p>
+</li>
+</ul>
+<p>The underlying gaps are already recognized upstream — the blind spot, the two-part
+split, the candidate signal sources (node-agent#894), and the mapping goals are all
+on record. What this RFC adds is making them <strong>executable</strong>: a validated signal
+source, a concrete node-agent integration seam, and the operational machinery to run
+it safely despite gVisor's session constraints. Part A ships value in a quarter and
+blocks on nothing. Part B is the harder, higher-value half and is already de-risked
+by the PoC. Measured PoC decode
+throughput is <strong>≈755K events/second/core</strong> at <strong>~130 bytes/event</strong> on the wire; the
+end-to-end incremental infrastructure cost is dominated not by compute (≈0.1% of a
+node) but by <strong>telemetry egress</strong>, which is the central architectural argument for
+node-local profiling before export.</p>
+<hr>
+<h2 id="motivation">Motivation</h2>
+<p><em>Why now.</em> Google made <strong>GKE Agent Sandbox GA in May 2026</strong> and introduced <strong>Agent
+Substrate</strong> alongside it. Both concede that the Kubernetes control plane was not built
+for how agents behave, and both move the security-relevant configuration into new
+object types. Adoption is not hypothetical: Google reports <strong>16× growth in five
+months</strong>, sandbox allocation at <strong>300 sandboxes/second/cluster</strong>, and <strong>sub-second</strong>
+sandbox startup (p90 ≈ 200 ms). The workload inside is untrusted <em>by definition</em> — it
+is model-generated code executed at runtime — so the isolation and egress posture of
+the resource that defines it is the whole trust boundary.</p>
+<p>Two facts make this a security gap rather than a configuration nicety:</p>
+<ol>
+<li>
+<p><strong>The definitions are unscanned.</strong> An <code>ActorTemplate</code> decides whether
+   model-generated code runs under gVisor/Kata or a shared kernel; a <code>WorkerPool</code>
+   decides whether one runaway actor can starve every other session multiplexed onto
+   it. Nothing in Kubescape treats these as posture decisions today.</p>
+</li>
+<li>
+<p><strong>The runtime is opaque.</strong> Even a perfectly hardened sandbox is a black box to the
+   node-agent once it is running. gVisor's own maintainers and Kubescape's parent
+   company both state the split plainly: the sandbox "controls <em>where</em> the agent runs
+   … it says nothing about <em>what</em> the agent does once running." Static posture says
+   <em>the door is locked</em>; runtime visibility says <em>someone is climbing through the
+   window anyway.</em></p>
+</li>
+</ol>
+<p>This RFC closes both, in the codebase (Kubescape scan/admission + node-agent) that
+already has the machinery to carry them.</p>
+<hr>
+<h2 id="requirements">Requirements</h2>
+<h3 id="functional-requirements">Functional requirements</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Requirement</th>
+<th>Part</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-1</td>
+<td>Scan <code>Sandbox</code>/<code>SandboxTemplate</code> (<code>agents.x-k8s.io</code>, <code>extensions.agents.x-k8s.io</code>) and <code>WorkerPool</code>/<code>ActorTemplate</code>/<code>SandboxConfig</code> (<code>ate.dev</code>) as native resources.</td>
+<td>A</td>
+</tr>
+<tr>
+<td>FR-2</td>
+<td>Ship a named <em>Agent Runtime Hardening</em> framework wiring the already-merged agent controls (C-0297 hardened runtime class, C-0301 agent egress) plus new controls, mapped to OWASP-LLM-2025 and MITRE ATLAS.</td>
+<td>A</td>
+</tr>
+<tr>
+<td>FR-3</td>
+<td>Surface findings through the existing CLI, operator, and MCP-server paths with Kubescape-style remediation.</td>
+<td>A</td>
+</tr>
+<tr>
+<td>FR-4</td>
+<td>Provide an admission variant (VAP / Kubescape admission) rejecting or warning on non-hardened agent definitions, with an explicit note that admission fires on definition CREATE/UPDATE, not on out-of-band actor spawns.</td>
+<td>A</td>
+</tr>
+<tr>
+<td>FR-5</td>
+<td>Recover runtime signals from inside a gVisor sandbox (exec, network, open, fork, exit, ptrace) and normalize them into node-agent event types.</td>
+<td>B</td>
+</tr>
+<tr>
+<td>FR-6</td>
+<td>Attribute each recovered event to its sandbox/container id for workload correlation.</td>
+<td>B</td>
+</tr>
+<tr>
+<td>FR-7</td>
+<td>Detect <code>Default</code>-session contention and degrade gracefully to host-boundary signals plus a posture finding, rather than going dark.</td>
+<td>B</td>
+</tr>
+</tbody>
+</table>
+<h3 id="non-functional-requirements">Non-functional requirements</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Requirement</th>
+<th>Target (from measurement / published data)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-1</td>
+<td>Decode/normalize CPU overhead per node</td>
+<td>≤ 1% of one core at high load (measured: 0.12% of an 8-vCPU node at 7,500 ev/s)</td>
+</tr>
+<tr>
+<td>NFR-2</td>
+<td>Sensor memory footprint</td>
+<td>Bounded; all wire fields size-capped (the sandboxed workload is the adversary)</td>
+</tr>
+<tr>
+<td>NFR-3</td>
+<td>No added latency on the actor's hot path</td>
+<td>Sensor is out-of-band (Sentry → UDS → collector); zero inline blocking</td>
+</tr>
+<tr>
+<td>NFR-4</td>
+<td>Scan-path parity</td>
+<td>Rego controls validate offline against fixtures with regolibrary's testrunner (no cluster)</td>
+</tr>
+<tr>
+<td>NFR-5</td>
+<td>Telemetry cost</td>
+<td>Node-local profiling before export; ≤ ~5% of raw events persisted (cost model §)</td>
+</tr>
+<tr>
+<td>NFR-6</td>
+<td>CRD schema resilience</td>
+<td>Field access behind a thin helper for the still-drifting <code>ate.dev/v1alpha1</code> group</td>
+</tr>
+</tbody>
+</table>
+<p><em>Product requirements:</em> this RFC is the technical design; the product scope is the
+LFX Term-3 mentorship deliverable set (Sep–Nov 2026). Part A is fully in scope; Part B
+lands the sensor + node-agent seam in scope, with full multi-sandbox brokering and
+GKE-managed-session interaction as term-time stretch.</p>
+<hr>
+<h2 id="background">Background</h2>
+<p><strong>Key terms.</strong></p>
+<ul>
+<li><strong>GKE Agent Sandbox / Agent Substrate</strong> — Google's agent-execution platform. Sandbox
+  gives each agent a low-latency, gVisor-isolated environment with an integrated warm
+  pool; Substrate multiplexes millions of short-lived "actors" onto pre-warmed pods
+  with pod-snapshot suspend/resume.</li>
+<li><strong>Actor / WorkerPool / ActorTemplate</strong> — an <em>actor</em> is one agent session.
+  <code>ActorTemplate</code> is the per-actor workload spec; <code>WorkerPool</code> is the pool of warm
+  pods actors are multiplexed onto (an <strong>N:1</strong> relationship). Substrate's group is
+  <strong><code>ate.dev</code></strong> (not <code>agentsubstrate.google.com</code>, as earlier thread comments assumed).</li>
+<li><strong>gVisor / Sentry / runsc</strong> — gVisor is a userspace kernel. <code>runsc</code> is its runtime;
+  the <strong>Sentry</strong> intercepts and services the sandboxed process's syscalls in
+  userspace, so they never reach the host kernel.</li>
+<li><strong>seccheck</strong> — gVisor's first-class trace subsystem. Its <code>remote</code> sink serializes
+  each trace <em>point</em> as a protobuf and streams it over a <code>SOCK_SEQPACKET</code> Unix socket
+  to an external monitor. <code>runsc trace create</code> attaches a session to an
+  already-running sandbox.</li>
+<li><strong>node-agent</strong> — Kubescape's DaemonSet runtime sensor. It derives exec/network/file
+  signals from host-kernel eBPF (Inspektor Gadget) and maintains an <em>Application
+  Profile</em> behavioral baseline per workload.</li>
+<li><strong>CADR</strong> — Cloud Application Detection &amp; Response: the market category for runtime,
+  behavior-based detection that ARMO/Kubescape and peers are moving toward, distinct
+  from posture-only CSPM/KSPM.</li>
+</ul>
+<p><strong>Current state of the world.</strong> Kubescape scans standard workloads (core/apps/batch
+API groups) statically and, via node-agent, at runtime. Two agent controls (C-0297,
+C-0301) are merged into regolibrary but belong to <strong>no framework</strong>, so they run in no
+scan (their PRs explicitly left framework registration out of scope). No agent CRD is
+a scan target. The node-agent has no path into a gVisor sandbox. Two adjacent efforts
+exist upstream: <a href="https://github.com/kubescape/node-agent/issues/894" target="_blank" rel="noopener">node-agent#894</a>
+identifies seccheck as a Part B signal source and names its single-session limitation
+(note-only; no consumer code), and
+<a href="https://github.com/kubescape/regolibrary/pull/761" target="_blank" rel="noopener">regolibrary#761</a> (Aug 4, draft)
+proposed a broader <em>AgentRuntimeHardening</em> control set — parked at maintainer request
+("let's wait anyway to avoid any interference") pending this LFX project.</p>
+<hr>
+<h2 id="goals-and-non-goals">Goals and Non-Goals</h2>
+<p><strong>Goals</strong></p>
+<ul>
+<li>Treat agent-runtime CRDs as first-class posture + admission targets (Part A).</li>
+<li>Prove and land a runtime-visibility signal source from inside gVisor into the
+  node-agent pipeline (Part B).</li>
+<li>Map controls to OWASP-LLM-2025 and MITRE ATLAS for security-team legibility.</li>
+<li>Keep the whole thing cheap: node-local, out-of-band, offline-validatable.</li>
+</ul>
+<p><strong>Non-Goals</strong></p>
+<ul>
+<li>No re-architecture of node-agent's host-eBPF sensing. Part B <em>adds</em> a source.</li>
+<li>No per-session behavioral <em>enforcement</em> inside the sandbox in v1 (detection first).</li>
+<li>No cross-object ratio checks (per-actor-vs-pool ceilings) in Part A v1 — deferred;
+  Substrate's own #679 (right-sizing actor sandboxes from declared <code>ActorTemplate</code>
+  limits) reduces the urgency of cross-object math.</li>
+<li>No enumeration of live actors from Substrate's side control plane — static CRD
+  scanning covers the <em>definitions</em>, which is the correct v1 scope.</li>
+</ul>
+<hr>
+<h2 id="product--user-use-cases">Product &amp; User Use Cases</h2>
+<p>The proposal is only worth building if it maps to jobs real people are trying to do.
+Five use cases, by persona:</p>
+<p><strong>UC-1 — Platform / GKE security engineer: "block an unsafe agent before it runs."</strong>
+A team ships an <code>ActorTemplate</code> that runs on the default runtime (shared host kernel)
+with open egress. At author time (IDE/CI) and at deploy time (admission), Kubescape
+flags or rejects it: <em>isolation class is not gVisor/Kata; egress is not default-deny.</em>
+This is the left-to-right guardrail Kubescape already tells for standard workloads,
+extended to agents. <em>(FR-1, FR-2, FR-4)</em></p>
+<p><strong>UC-2 — SecOps / detection engineer: "see what a sandboxed agent actually did."</strong>
+An agent is prompt-injected into running <code>curl … | sh</code>, connecting to an external host
+and reading <code>/etc/shadow</code>. Host eBPF sees nothing — it's all inside gVisor. The Part B
+sensor recovers the exec, the egress destination, and the sensitive-file open,
+attributes them to the actor's container id, and the <em>existing</em> runtime rules fire.
+This is the "50,000 records exfiltrated, every native GKE control passed" scenario ARMO
+describes, made visible. <em>(FR-5, FR-6)</em></p>
+<p><strong>UC-3 — Compliance / GRC: "prove tenant isolation for multi-tenant agents."</strong>
+An auditor needs evidence that no single actor can exhaust a shared <code>WorkerPool</code> and
+that snapshot storage (volatile memory + FS state at rest) is encrypted and
+access-scoped. The framework's per-actor-ceiling and snapshot-encryption controls
+produce the finding + remediation trail, mapped to OWASP-LLM / ATLAS. <em>(FR-2, FR-3)</em></p>
+<p><strong>UC-4 — Incident responder: "attribute an egress spike to a session."</strong>
+During an incident, the responder needs per-actor attribution of an outbound
+connection. Even where full syscall visibility is unavailable (a held <code>Default</code>
+session), the host-boundary fallback still gives session start/end and gofer-initiated
+egress, plus an explicit posture finding that visibility is degraded on that node — so
+the gap is known, not silent. <em>(FR-7)</em></p>
+<p><strong>UC-5 — Cluster operator / FinOps: "turn this on without a telemetry bill shock."</strong>
+The operator enables the sensor and wants predictable cost. Node-local profiling
+persists only anomalous/first-seen events (~3–5%), keeping incremental infrastructure
+cost to ≈$1/node/month storage and single-digit dollars of egress even at high actor
+density (cost model §). <em>(NFR-1, NFR-5)</em></p>
+<hr>
+<h2 id="gap-analysis">Gap Analysis</h2>
+<p>What is already captured upstream, and what does this RFC actually add? The honest
+framing first: <strong>the white space is already recognized</strong> — the blind spot, the
+posture/runtime split, the candidate signal sources, and the mapping goals are all on
+record in <a href="https://github.com/kubescape/designs-and-proposals/pull/10" target="_blank" rel="noopener">#10</a>, the</p>
+<h1 id="2557-thread-and-node-agent894">2557 thread, and <a href="https://github.com/kubescape/node-agent/issues/894" target="_blank" rel="noopener">node-agent#894</a>.</h1>
+<p>This RFC's contribution is <strong>execution, empirical validation, and integration
+design</strong>: converting the recognized problem into a Kubescape-shaped design and a
+working implementation. Below is the line-by-line reconciliation against what a
+production-grade agent-security capability needs.</p>
+<h3 id="captured-officially-in-10--2557">Captured officially (in #10 / #2557)</h3>
+<ul>
+<li>Agent CRDs as scan targets; the six candidate control families (isolation, egress,
+  ceilings, provenance, credential scoping, snapshot storage). ✔</li>
+<li>Admission variant (VAP / Kubescape admission). ✔</li>
+<li>OWASP-LLM / MITRE ATLAS mapping intent. ✔</li>
+<li>The N:1 <code>WorkerPool</code>↔actor posture problem, and the CREATE/UPDATE-vs-spawn admission
+  scope caveat (raised by @Aryanbhargava18, deepened by @Shivampal157). ✔</li>
+<li>The gVisor visibility gap acknowledged and <em>explicitly deferred</em> to separate work;
+  node-agent#894 independently identifies <strong>seccheck</strong> (remote sink, reference server,
+  dynamic attach via <code>runsc trace create</code>) as the strongest Part B source <strong>and names
+  the single-<code>Default</code>-session limitation</strong>. ✔</li>
+<li>Trace-stream schema-stability risk and alternatives raised in-thread — Falco's
+  gVisor-engine removal, host-boundary signals as the stable-but-coarse path, the
+  <code>runsc</code> metric-server endpoint as a middle path (@Shivampal157). ✔</li>
+<li>A broader <em>AgentRuntimeHardening</em> control set already proposed in regolibrary#761
+  (Aug 4, draft) — parked by maintainers to avoid interference with this LFX project;
+  the merged C-0297/C-0301 PRs left framework registration explicitly out of scope. ✔</li>
+<li>CEL/VAP plumbing for custom apiGroups already landing via normal contributions
+  (#3177 plural resolution, #3196 version discovery, #3099 <code>request.resource</code>). ✔</li>
+</ul>
+<h3 id="what-this-rfc-adds-on-top-of-the-prior-discussion">What this RFC adds on top of the prior discussion</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Where the discussion stands</th>
+<th>This RFC's addition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G-1</td>
+<td><strong>CRD identity was guessed wrong in-thread</strong> (comments assumed <code>agentsubstrate.google.com</code>), and the stability <em>concern</em> was raised without evidence.</td>
+<td>The corrected identity map, pinned from upstream: Substrate is <strong><code>ate.dev</code></strong> (all v1alpha1); Sandbox is <code>agents.x-k8s.io</code> + <code>extensions.agents.x-k8s.io</code> (SandboxTemplate at v1beta1) — plus quantified churn evidence (37 manifest commits since mid-May; pause-image move #848, secretKeyRef removal #835, right-sizing #679) motivating field access behind a thin helper.</td>
+</tr>
+<tr>
+<td>G-2</td>
+<td><strong>Signal source identified (#894 argues for seccheck) but no consumer exists</strong> — no fork, no code, nothing feeds node-agent.</td>
+<td>A <strong>working PoC</strong> of the seccheck remote-sink path, decoding real gVisor protobufs into node-agent events, with a cluster-free E2E, a real-<code>runsc</code> path, and a measured performance envelope.</td>
+</tr>
+<tr>
+<td>G-3</td>
+<td><strong>The single-<code>Default</code>-session constraint is named (#894) but not designed for.</strong> It is the crux of productionizing Part B.</td>
+<td>Reproduced and designed around: contention detection → host-boundary fallback → degraded-visibility posture finding → per-node sink broker for multi-consumer sharing → upstream multi-session ask.</td>
+</tr>
+<tr>
+<td>G-4</td>
+<td><strong>Schema-stability risk is raised in-thread</strong> (Falco's v0.44.0 gVisor-engine removal, metric-server alternative — @Shivampal157) <strong>but unmitigated.</strong></td>
+<td>A concrete, implemented mitigation: decode isolated behind bindings generated from the vendored <code>.proto</code>s with provenance, versioned; handshake + unknown-point tolerance per gVisor's own sink guidance; metric-server retained as the stable-but-coarse alternative.</td>
+</tr>
+<tr>
+<td>G-5</td>
+<td><strong>No cost / performance envelope.</strong></td>
+<td>Measured benchmarks + a cost model (this doc).</td>
+</tr>
+<tr>
+<td>G-6</td>
+<td><strong>No behavioral-baseline story for agents.</strong> Posture ≠ detection.</td>
+<td>Part B feeds node-agent's existing Application Profile so per-agent behavioral baselining ("Application Profile DNA") applies to sandboxed actors — the ARMO-stated direction, extended into the sandbox.</td>
+</tr>
+<tr>
+<td>G-7</td>
+<td><strong>Response/enforcement path unstated.</strong></td>
+<td>v1 is detection + admission; graduated response (network-policy soft-quarantine, seccomp tightening) named as future work, matching peer-vendor "observe → baseline → enforce."</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="competitive--vendor-landscape">Competitive &amp; Vendor Landscape</h2>
+<p><em>Context for reviewers: what cybersecurity vendors typically offer for this class of
+problem, what they target, and where this proposal sits.</em></p>
+<p><strong>The market is moving from posture to runtime (CADR).</strong> The 2026 cloud-native
+detection-and-response field — Sysdig Secure (on open-source <strong>Falco</strong>), <strong>Aqua</strong>,
+Palo Alto <strong>Prisma Cloud</strong>, <strong>Wiz</strong>, <strong>CrowdStrike</strong> Falcon Cloud Security, Microsoft
+Defender for Containers, and <strong>ARMO CADR</strong> (Kubescape's commercial parent) — competes
+on a common capability stack:</p>
+<ul>
+<li><strong>eBPF kernel-level sensing</strong> with <strong>per-workload behavioral baselines</strong> ("learn
+  expected behavior for every workload").</li>
+<li><strong>Full-stack correlation</strong> (app ↔ container ↔ K8s ↔ cloud) that produces "attack
+  stories" rather than isolated alerts.</li>
+<li><strong>Admission + graduated response</strong> beyond kill/isolate — soft-quarantine via network
+  policy, seccomp tightening, drift detection.</li>
+<li><strong>Low overhead as a selling point</strong> — vendors cite <strong>1–2.5% CPU</strong> as competitive.</li>
+</ul>
+<p><strong>What these solutions target</strong> (the threat taxonomy this proposal must speak to):
+reverse shells and RCE, application-layer attacks (SSRF, command/SQL injection),
+lateral movement via stolen credentials, Kubernetes API abuse and <strong>service-account
+token theft</strong>, cloud escalation (IAM abuse, <strong>S3/bucket exfiltration</strong>), supply-chain
+compromise, and cryptomining.</p>
+<p><strong>Pricing model.</strong> Per-node and/or per-workload licensing, with runtime frequently a
+separate add-on module (Prisma). This matters for the cost framing: the vendor's own
+list price sits on top of the infrastructure cost this RFC models.</p>
+<p><strong>Where this proposal sits — the differentiated wedge.</strong> Every vendor above assumes
+its eBPF sensor can see the workload. <strong>For gVisor-isolated agents, that assumption
+breaks</strong> — which is exactly why Falco <em>removed</em> its gVisor engine rather than maintain
+it. This proposal:</p>
+<ol>
+<li>Is the <strong>only open, upstream</strong> attempt to restore that visibility for the specific
+   agent-sandbox case, feeding a CNCF sensor (node-agent) that <strong>100,000+
+   organizations</strong> already run via Kubescape.</li>
+<li>Attacks the <strong>agent-specific</strong> threats the generic taxonomy misses: prompt-injection
+   → excessive-agency egress, per-session credential blast radius, N:1 tenant
+   starvation, snapshot-at-rest exposure — mapped to <strong>OWASP-LLM-2025</strong> and <strong>MITRE
+   ATLAS</strong>, not just the classic CNAPP kill-chain.</li>
+<li>Keeps the classic protections (egress, lateral movement, token theft) by mapping
+   the recovered signals onto node-agent's <em>existing</em> rules, so no detection content is
+   rewritten.</li>
+</ol>
+<p>In short: the incumbents target the runtime; none of them can currently <em>see</em> the
+agent runtime. That is the gap.</p>
+<hr>
+<h2 id="design">Design</h2>
+<p>The design has two independently shippable halves. Diagrams are provided as editable
+Excalidraw sources (<code>diagrams/*.excalidraw</code>) and rendered SVGs.</p>
+<h3 id="part-a--posture--admission">Part A — posture &amp; admission</h3>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="16 -4 1028 488" width="1028" height="488" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect x="16" y="-4" width="1028" height="488" fill="#ffffff"/>
+<defs>
+<marker id="d2ah0" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#4a3aa7"/></marker>
+<marker id="d2ah1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#2a78d6"/></marker>
+<marker id="d2ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#e34948"/></marker>
+</defs>
+<rect x="40" y="120" width="260" height="150" rx="10" fill="#fdece4" stroke="#eb6834" stroke-width="2"/>
+<rect x="370" y="120" width="280" height="150" rx="10" fill="#e9e7f4" stroke="#4a3aa7" stroke-width="2"/>
+<rect x="720" y="60" width="300" height="70" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="720" y="160" width="300" height="70" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="720" y="260" width="300" height="70" rx="10" fill="#fce8e8" stroke="#e34948" stroke-width="2"/>
+<rect x="720" y="380" width="300" height="80" rx="10" fill="#e9e7f4" stroke="#4a3aa7" stroke-width="2"/>
+<line x1="300" y1="195" x2="370" y2="195" stroke="#4a3aa7" stroke-width="2" marker-end="url(#d2ah0)"/>
+<line x1="650" y1="195" x2="720" y2="95" stroke="#2a78d6" stroke-width="2" marker-end="url(#d2ah1)"/>
+<line x1="650" y1="195" x2="720" y2="195" stroke="#2a78d6" stroke-width="2" marker-end="url(#d2ah1)"/>
+<line x1="650" y1="195" x2="720" y2="295" stroke="#e34948" stroke-width="2" marker-end="url(#d2ah2)"/>
+<line x1="870" y1="330" x2="870" y2="380" stroke="#4a3aa7" stroke-width="2" marker-end="url(#d2ah0)"/>
+<text x="40" y="40" font-size="20" fill="#0b0b0b" text-anchor="start" font-weight="700">Diagram 2 — Agent-runtime posture &amp; admission flow (Part A)</text>
+<text x="40" y="63" font-size="13" fill="#52514e" text-anchor="start">Agent CRDs become first-class scan targets; the same controls gate authoring, CI, and admission.</text>
+<text x="170" y="166" font-size="13" fill="#0b0b0b" text-anchor="middle">Agent CRDs</text>
+<text x="170" y="182" font-size="13" fill="#0b0b0b" text-anchor="middle">• Sandbox / SandboxTemplate</text>
+<text x="170" y="199" font-size="13" fill="#0b0b0b" text-anchor="middle">  (agents.x-k8s.io)</text>
+<text x="170" y="215" font-size="13" fill="#0b0b0b" text-anchor="middle">• WorkerPool / ActorTemplate</text>
+<text x="170" y="231" font-size="13" fill="#0b0b0b" text-anchor="middle">  (ate.dev)</text>
+<text x="510" y="142" font-size="13" fill="#0b0b0b" text-anchor="middle">AgentRuntimeHardening</text>
+<text x="510" y="158" font-size="13" fill="#0b0b0b" text-anchor="middle">Rego framework</text>
+<text x="510" y="174" font-size="13" fill="#0b0b0b" text-anchor="middle">• isolation class</text>
+<text x="510" y="190" font-size="13" fill="#0b0b0b" text-anchor="middle">• default-deny egress</text>
+<text x="510" y="207" font-size="13" fill="#0b0b0b" text-anchor="middle">• per-actor ceilings</text>
+<text x="510" y="223" font-size="13" fill="#0b0b0b" text-anchor="middle">• image provenance</text>
+<text x="510" y="239" font-size="13" fill="#0b0b0b" text-anchor="middle">• credential scoping</text>
+<text x="510" y="255" font-size="13" fill="#0b0b0b" text-anchor="middle">• snapshot encryption</text>
+<text x="335" y="189" font-size="12" fill="#4a3aa7" text-anchor="middle">pin schemas</text>
+<text x="335" y="204" font-size="12" fill="#4a3aa7" text-anchor="middle">(v1beta1 / v1alpha1)</text>
+<text x="870" y="90" font-size="13" fill="#0b0b0b" text-anchor="middle">CLI / IDE / CI scan</text>
+<text x="870" y="107" font-size="13" fill="#0b0b0b" text-anchor="middle">(shift-left posture)</text>
+<text x="870" y="190" font-size="13" fill="#0b0b0b" text-anchor="middle">Operator + MCP server</text>
+<text x="870" y="207" font-size="13" fill="#0b0b0b" text-anchor="middle">(continuous cluster scan)</text>
+<text x="870" y="290" font-size="13" fill="#0b0b0b" text-anchor="middle">Admission (VAP / Kubescape)</text>
+<text x="870" y="307" font-size="13" fill="#0b0b0b" text-anchor="middle">reject non-hardened ActorTemplate</text>
+<text x="870" y="408" font-size="12" fill="#0b0b0b" text-anchor="middle">Findings + remediation</text>
+<text x="870" y="423" font-size="12" fill="#0b0b0b" text-anchor="middle">OWASP-LLM 2025 · MITRE ATLAS</text>
+<text x="870" y="438" font-size="12" fill="#0b0b0b" text-anchor="middle">(admission fires on defs, not spawns)</text>
+<text x="40" y="312" font-size="12" fill="#52514e" text-anchor="start">Gap closed vs. thread:</text>
+<text x="40" y="327" font-size="12" fill="#52514e" text-anchor="start">• group is ate.dev (not</text>
+<text x="40" y="342" font-size="12" fill="#52514e" text-anchor="start">  agentsubstrate.google.com)</text>
+<text x="40" y="357" font-size="12" fill="#52514e" text-anchor="start">• N:1 → per-object v1,</text>
+<text x="40" y="372" font-size="12" fill="#52514e" text-anchor="start">  cross-object ratio deferred</text>
+<text x="40" y="387" font-size="12" fill="#52514e" text-anchor="start">• #3177 fixes plural guess</text>
+</svg><figcaption>Posture &amp; admission flow</figcaption></figure>
+<p>Controls are written in Rego against the pinned CRD schemas, consistent with the
+existing regolibrary, each carrying Kubescape-style remediation. The <em>Agent Runtime
+Hardening</em> framework wires the two already-merged agent controls (which run in no
+framework today) plus the new controls, and adds OWASP-LLM-2025 / MITRE-ATLAS mapping
+attributes. The same controls drive three surfaces from one definition: <strong>shift-left</strong>
+(CLI/IDE/CI), <strong>continuous</strong> (operator + MCP), and <strong>gate</strong> (VAP / Kubescape
+admission). Candidate control set and mapping:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Checks</th>
+<th>OWASP-LLM 2025</th>
+<th>MITRE ATLAS (tactic)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime isolation enforced</td>
+<td><code>runtimeClassName</code> ∈ {gVisor, Kata}, not shared kernel</td>
+<td>LLM06 Excessive Agency</td>
+<td>Execution / Defense Evasion</td>
+</tr>
+<tr>
+<td>Default-deny egress</td>
+<td>network posture denies egress by default + allowlist</td>
+<td>LLM02 Sensitive Info Disclosure</td>
+<td>Exfiltration</td>
+</tr>
+<tr>
+<td>Per-actor resource ceilings</td>
+<td>CPU/mem limits set (per-object v1; cross-object deferred)</td>
+<td>LLM10 Unbounded Consumption</td>
+<td>Impact</td>
+</tr>
+<tr>
+<td>Image provenance</td>
+<td>image from allowlisted registry, signature-verified where available</td>
+<td>LLM03 Supply Chain</td>
+<td>ML Supply Chain Compromise</td>
+</tr>
+<tr>
+<td>Per-session credential scoping</td>
+<td>SA tokens/secrets not broadly mounted</td>
+<td>LLM06 Excessive Agency</td>
+<td>Credential Access</td>
+</tr>
+<tr>
+<td>Snapshot storage protected</td>
+<td>snapshot target encrypted + access-scoped</td>
+<td>LLM02 Sensitive Info Disclosure</td>
+<td>Collection</td>
+</tr>
+</tbody>
+</table>
+<p><strong>N:1 handling (the thread's open design gap).</strong> A <code>WorkerPool</code> sets pool-level compute;
+an <code>ActorTemplate</code> sets per-actor spec. v1 scopes to <em>per-object</em> checks (isolation,
+egress default, "limits exist") and explicitly defers cross-object ratio math (does the
+<code>ActorTemplate</code> request bound relative to <code>WorkerPool</code> capacity), which Rego cannot do
+cleanly unless both objects are in one scan batch. Documentation makes the
+admission-scope caveat explicit: the VAP fires on <code>ActorTemplate</code> CREATE/UPDATE, <strong>not</strong>
+on out-of-band actor spawns through Substrate's side control plane.</p>
+<h3 id="part-b--runtime-visibility-poc-proven">Part B — runtime visibility (PoC-proven)</h3>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="16 -4 1068 438" width="1068" height="438" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect x="16" y="-4" width="1068" height="438" fill="#ffffff"/>
+<defs>
+<marker id="d1ah0" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#eb6834"/></marker>
+<marker id="d1ah1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#2a78d6"/></marker>
+<marker id="d1ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#1baf7a"/></marker>
+</defs>
+<rect x="40" y="110" width="300" height="270" rx="10" fill="#fdf4ef" stroke="#eb6834" stroke-width="2" stroke-dasharray="7 5"/>
+<rect x="70" y="170" width="240" height="50" rx="10" fill="#fdece4" stroke="#eb6834" stroke-width="2"/>
+<rect x="70" y="250" width="240" height="50" rx="10" fill="#fdece4" stroke="#eb6834" stroke-width="2"/>
+<rect x="430" y="180" width="260" height="140" rx="10" fill="#e4f5ee" stroke="#1baf7a" stroke-width="2"/>
+<rect x="760" y="120" width="300" height="90" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="760" y="240" width="300" height="70" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="760" y="340" width="300" height="70" rx="10" fill="#e9e7f4" stroke="#4a3aa7" stroke-width="2"/>
+<line x1="190" y1="220" x2="190" y2="250" stroke="#eb6834" stroke-width="2" marker-end="url(#d1ah0)"/>
+<line x1="310" y1="275" x2="430" y2="250" stroke="#1baf7a" stroke-width="2" marker-end="url(#d1ah2)"/>
+<line x1="690" y1="250" x2="760" y2="165" stroke="#1baf7a" stroke-width="2" marker-end="url(#d1ah2)"/>
+<line x1="910" y1="210" x2="910" y2="240" stroke="#2a78d6" stroke-width="2" marker-end="url(#d1ah1)"/>
+<line x1="910" y1="310" x2="910" y2="340" stroke="#2a78d6" stroke-width="2" marker-end="url(#d1ah1)"/>
+<text x="40" y="40" font-size="20" fill="#0b0b0b" text-anchor="start" font-weight="700">Diagram 1 — gVisor runtime-visibility data flow (Part B, PoC-proven)</text>
+<text x="40" y="63" font-size="13" fill="#52514e" text-anchor="start">Signals invisible to host-kernel eBPF are recovered from the Sentry and normalized into the node-agent event pipeline.</text>
+<text x="56" y="136" font-size="14" fill="#eb6834" text-anchor="start">gVisor sandbox (untrusted actor)</text>
+<text x="190" y="190" font-size="13" fill="#0b0b0b" text-anchor="middle">model-generated code</text>
+<text x="190" y="207" font-size="13" fill="#0b0b0b" text-anchor="middle">(exec / connect / open / ptrace)</text>
+<text x="190" y="270" font-size="13" fill="#0b0b0b" text-anchor="middle">Sentry (userspace kernel)</text>
+<text x="190" y="287" font-size="13" fill="#0b0b0b" text-anchor="middle">seccheck trace points</text>
+<text x="60" y="342" font-size="12" fill="#e34948" text-anchor="start">host kernel sees a black box →</text>
+<text x="60" y="357" font-size="12" fill="#e34948" text-anchor="start">no syscalls cross to host eBPF</text>
+<text x="560" y="221" font-size="13" fill="#0b0b0b" text-anchor="middle">collector (this PoC)</text>
+<text x="560" y="237" font-size="13" fill="#0b0b0b" text-anchor="middle">• SOCK_SEQPACKET UDS</text>
+<text x="560" y="254" font-size="13" fill="#0b0b0b" text-anchor="middle">• handshake + 8B wire header</text>
+<text x="560" y="270" font-size="13" fill="#0b0b0b" text-anchor="middle">• decode real gVisor protobufs</text>
+<text x="560" y="286" font-size="13" fill="#0b0b0b" text-anchor="middle">• normalize → node-agent event</text>
+<text x="370" y="256" font-size="12" fill="#1baf7a" text-anchor="middle">seccheck remote sink</text>
+<text x="370" y="272" font-size="12" fill="#1baf7a" text-anchor="middle">(SEQPACKET UDS)</text>
+<text x="910" y="160" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">node-agent event pipeline</text>
+<text x="910" y="178" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">Exec/Network/Open/Fork/Exit</text>
+<text x="910" y="270" font-size="13" fill="#0b0b0b" text-anchor="middle">rule engine + Application Profile</text>
+<text x="910" y="287" font-size="13" fill="#0b0b0b" text-anchor="middle">(existing runtime rules fire unchanged)</text>
+<text x="910" y="370" font-size="13" fill="#0b0b0b" text-anchor="middle">CADR alerts / admission feedback</text>
+<text x="910" y="387" font-size="13" fill="#0b0b0b" text-anchor="middle">OWASP-LLM · MITRE ATLAS</text>
+<text x="725" y="202" font-size="12" fill="#1baf7a" text-anchor="middle">normalized JSON</text>
+<text x="430" y="352" font-size="12" fill="#1baf7a" text-anchor="start">PoC measured: 8/8 points decoded; ~755K events/s/core decode;</text>
+<text x="430" y="367" font-size="12" fill="#1baf7a" text-anchor="start">~130 B/event on wire; 5.5 MB static collector.</text>
+</svg><figcaption>Runtime-visibility data flow</figcaption></figure>
+<p>The node-agent derives runtime signals from host-kernel eBPF; under gVisor the
+sandboxed process traps into the Sentry and the host kernel sees almost nothing. The
+sensor recovers visibility from the Sentry side:</p>
+<ul>
+<li><strong><code>cmd/collector</code></strong> binds the <code>SOCK_SEQPACKET</code> UDS, performs the seccheck handshake,
+  reads the 8-byte-header + protobuf datagram stream, decodes each point against
+  gVisor's <strong>real</strong> schemas (bindings generated from the vendored <code>.proto</code>), and
+  normalizes it into the node-agent event shape.</li>
+<li><strong><code>internal/normalize</code></strong> is the documented seccheck→node-agent mapping
+  (exec/network/open/fork/exit/ptrace + container-start metadata for correlation).</li>
+<li><strong><code>cmd/fakesentry</code> + <code>make e2e</code></strong> is a cluster-free E2E: a faithful replayer drives
+  the <em>real</em> wire protocol through a scripted actor session (start → clone → exec
+  <code>curl…|sh</code> → socket → connect to an external IP → open <code>/etc/shadow</code> → <code>ptrace</code> →
+  exit). The collector decodes all 8 points and maps 7 (container-start is unmapped
+  metadata, retained for correlation).</li>
+<li><strong><code>scripts/run-with-runsc.sh</code></strong> is the real-gVisor path: <code>runsc trace create</code> a
+  session against a running <code>--runtime=runsc</code> sandbox; identical collector code, only
+  the sender differs.</li>
+</ul>
+<p><strong>node-agent integration seam.</strong> The normalized <code>Event</code> mirrors what a node-agent
+tracer callback assembles. Integration is: (1) wrap the collector as a
+<code>containerwatcher</code> tracer, gated on a gVisor runtime class; (2) translate normalized
+events into node-agent's concrete <code>ExecEvent</code>/<code>NetworkEvent</code>/<code>OpenEvent</code> structs so
+existing rules and the Application Profile baseline fire unchanged; (3) correlate
+<code>container_id</code> to pod/actor via the mapping node-agent already maintains, seeded by the
+<code>MESSAGE_CONTAINER_START</code> point.</p>
+<h3 id="the-default-session-constraint">The <code>Default</code>-session constraint</h3>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="16 -4 1118 388" width="1118" height="388" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect x="16" y="-4" width="1118" height="388" fill="#ffffff"/>
+<defs>
+<marker id="d3ah0" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#1baf7a"/></marker>
+<marker id="d3ah1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#e34948"/></marker>
+<marker id="d3ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#4a3aa7"/></marker>
+<marker id="d3ah3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#eb6834"/></marker>
+<marker id="d3ah4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#2a78d6"/></marker>
+</defs>
+<rect x="60" y="150" width="200" height="60" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="330" y="150" width="200" height="60" rx="10" fill="#e7f0fb" stroke="#2a78d6" stroke-width="2"/>
+<rect x="600" y="90" width="220" height="70" rx="10" fill="#e4f5ee" stroke="#1baf7a" stroke-width="2"/>
+<rect x="880" y="90" width="230" height="70" rx="10" fill="#e4f5ee" stroke="#1baf7a" stroke-width="2"/>
+<rect x="600" y="220" width="220" height="70" rx="10" fill="#fce8e8" stroke="#e34948" stroke-width="2"/>
+<rect x="880" y="200" width="230" height="60" rx="10" fill="#fdece4" stroke="#eb6834" stroke-width="2"/>
+<rect x="880" y="290" width="230" height="60" rx="10" fill="#e9e7f4" stroke="#4a3aa7" stroke-width="2"/>
+<line x1="260" y1="180" x2="330" y2="180" stroke="#2a78d6" stroke-width="2" marker-end="url(#d3ah4)"/>
+<line x1="530" y1="180" x2="600" y2="125" stroke="#1baf7a" stroke-width="2" marker-end="url(#d3ah0)"/>
+<line x1="530" y1="180" x2="600" y2="255" stroke="#e34948" stroke-width="2" marker-end="url(#d3ah1)"/>
+<line x1="820" y1="125" x2="880" y2="125" stroke="#1baf7a" stroke-width="2" marker-end="url(#d3ah0)"/>
+<line x1="820" y1="255" x2="880" y2="230" stroke="#eb6834" stroke-width="2" marker-end="url(#d3ah3)"/>
+<line x1="820" y1="255" x2="880" y2="320" stroke="#4a3aa7" stroke-width="2" marker-end="url(#d3ah2)"/>
+<text x="40" y="40" font-size="20" fill="#0b0b0b" text-anchor="start" font-weight="700">Diagram 3 — Default-session contention &amp; graceful degradation (Part B productionization)</text>
+<text x="40" y="63" font-size="13" fill="#52514e" text-anchor="start">gVisor allows exactly one trace session named &#x27;Default&#x27; per sandbox. node-agent must degrade, not go dark.</text>
+<text x="160" y="175" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">node-agent detects</text>
+<text x="160" y="193" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">gVisor runtime class</text>
+<text x="430" y="175" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">attempt</text>
+<text x="430" y="193" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="600">runsc trace create</text>
+<text x="710" y="120" font-size="13" fill="#0b0b0b" text-anchor="middle">OWNS Default session</text>
+<text x="710" y="137" font-size="13" fill="#0b0b0b" text-anchor="middle">→ full syscall visibility</text>
+<text x="995" y="120" font-size="13" fill="#0b0b0b" text-anchor="middle">per-node sink broker</text>
+<text x="995" y="137" font-size="13" fill="#0b0b0b" text-anchor="middle">fan-out to consumers</text>
+<text x="710" y="250" font-size="13" fill="#0b0b0b" text-anchor="middle">Default already held</text>
+<text x="710" y="267" font-size="13" fill="#0b0b0b" text-anchor="middle">(contention)</text>
+<text x="995" y="225" font-size="13" fill="#0b0b0b" text-anchor="middle">host-boundary signals</text>
+<text x="995" y="242" font-size="13" fill="#0b0b0b" text-anchor="middle">(egress, Sentry lifecycle)</text>
+<text x="995" y="316" font-size="12" fill="#0b0b0b" text-anchor="middle">posture finding:</text>
+<text x="995" y="331" font-size="12" fill="#0b0b0b" text-anchor="middle">runtime visibility degraded</text>
+<text x="565" y="146" font-size="12" fill="#1baf7a" text-anchor="middle">success</text>
+<text x="565" y="212" font-size="12" fill="#e34948" text-anchor="middle">EEXIST</text>
+<text x="60" y="312" font-size="12" fill="#52514e" text-anchor="start">Long-term: upstream gVisor</text>
+<text x="60" y="327" font-size="12" fill="#52514e" text-anchor="start">multi-session support removes</text>
+<text x="60" y="342" font-size="12" fill="#52514e" text-anchor="start">the constraint at the root</text>
+<text x="60" y="357" font-size="12" fill="#52514e" text-anchor="start">(gVisor issue to be filed).</text>
+</svg><figcaption>Session-contention state machine</figcaption></figure>
+<p>gVisor permits <strong>exactly one trace session per sandbox</strong>, and it must be named
+<code>Default</code> ("only a single session can exist in the system and it must be called
+<code>Default</code>" — gVisor seccheck docs). If the platform or another tool already holds a
+sandbox's session, <code>trace create</code> fails. Note the asymmetry: collection does <strong>not</strong>
+need a broker — the remote sink's connection model already lets one process "monitor
+all sandboxes in the machine" (gVisor sink docs). The broker below solves the
+<em>downstream</em> problem: sharing each sandbox's single session across multiple
+consumers. The design: <strong>detect</strong> the
+contention (don't assume ownership) → <strong>fall back</strong> to host-boundary signals (egress at
+the CNI/conntrack layer, Sentry process lifecycle) so coverage degrades rather than
+going dark → <strong>raise a posture finding</strong> that runtime visibility is unavailable on that
+node (itself security-relevant) → medium-term, a <strong>per-node sink broker</strong> where
+node-agent owns the one session and re-publishes to multiple consumers → long-term, an
+<strong>upstream gVisor</strong> contribution for multi-session support (the constraint is flagged
+as removable in gVisor's own source comments).</p>
+<hr>
+<h2 id="benchmarks--performance">Benchmarks &amp; Performance</h2>
+<p><em>All PoC numbers below are </em><em>measured</em><em> in a Linux sandbox (Intel Xeon @ 2.10 GHz, Go
+1.24.7, <code>go test -bench</code>, single core), not estimated. Cluster-scale rows are clearly
+labelled as estimates derived from those measurements.</em></p>
+<h3 id="measured--decode--normalize-the-collector-hot-path">Measured — decode + normalize (the collector hot path)</h3>
+<table>
+<thead>
+<tr>
+<th>Point type</th>
+<th>Latency</th>
+<th>Throughput/core</th>
+<th>Wire size</th>
+<th>Allocs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>connect()</code> (network egress)</td>
+<td><strong>1,218 ns/op</strong></td>
+<td>~821K ev/s</td>
+<td>78 B + 8 B hdr = <strong>86 B</strong></td>
+<td>15 (912 B)</td>
+</tr>
+<tr>
+<td><code>execve()</code> (process exec)</td>
+<td><strong>1,432 ns/op</strong></td>
+<td>~698K ev/s</td>
+<td>166 B + 8 B hdr = <strong>174 B</strong></td>
+<td>22 (1,184 B)</td>
+</tr>
+<tr>
+<td><strong>Blended</strong></td>
+<td><strong>~1,325 ns/op</strong></td>
+<td><strong>≈755K ev/s/core</strong></td>
+<td><strong>~130 B/event</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>E2E correctness:</strong> <code>PASS: 8/8 points decoded from the real seccheck wire format and
+  normalized to node-agent events</code> — including recovering egress dst <code>203.0.113.7:80</code>
+  from the raw <code>connect()</code> sockaddr and attributing every event to the sandbox id.</li>
+<li><strong>Collector binary:</strong> 5.5 MB static, stdlib-only socket path (no cgo).</li>
+</ul>
+<h3 id="estimated--cluster-scale-derived-from-the-measured-hot-path">Estimated — cluster-scale, derived from the measured hot path</h3>
+<table>
+<thead>
+<tr>
+<th>Load profile (per node)</th>
+<th>Events/s/node</th>
+<th>Decode CPU</th>
+<th>UDS throughput</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Low (50 actors, 20 ev/s, 15% active)</td>
+<td>150</td>
+<td>~0.0002 core</td>
+<td>0.02 MB/s</td>
+</tr>
+<tr>
+<td>Med (150 actors, 50 ev/s, 20% active)</td>
+<td>1,500</td>
+<td>~0.002 core</td>
+<td>0.20 MB/s</td>
+</tr>
+<tr>
+<td>High (300 actors, 100 ev/s, 25% active)</td>
+<td>7,500</td>
+<td><strong>~0.010 core (0.12% of an 8-vCPU node)</strong></td>
+<td>0.97 MB/s</td>
+</tr>
+</tbody>
+</table>
+<p>Even the High profile spends <strong>~1% of a single core</strong> on decode — well under the
+1–2.5% CPU envelope competitors advertise for their <em>entire</em> sensor, because this is
+one out-of-band decode loop, not an inline interception path. <em>Events/s figures assume
+a security-relevant point subset (exec/net/open/fork/exit/ptrace), not every syscall —
+the seccheck session config selects points, which is the primary cost lever.</em></p>
+<p><strong>Context — gVisor's own overhead</strong> (published, for completeness): 10–30% on
+I/O/syscall-heavy workloads, minimal for CPU-bound; the sensor adds nothing inline on
+top of this since it consumes the Sentry's existing trace stream.</p>
+<hr>
+<h2 id="resource--telemetry-cost-model">Resource &amp; Telemetry Cost Model</h2>
+<p>Incremental infra cost of running Part B, modeled from the measured hot path. Prices
+use GCP list (compute <code>n2-standard-8</code> ≈ $0.388/hr; regional storage $0.02/GB-mo;
+inter-region egress $0.08/GB). Assumes node-local profiling persists <strong>~3%</strong> of events
+(anomalous/first-seen only, as node-agent's Application Profile already does).</p>
+<table>
+<thead>
+<tr>
+<th>Cost component (per node / month)</th>
+<th>Low</th>
+<th>Med</th>
+<th>High</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decode compute</td>
+<td>$0.01</td>
+<td>$0.07</td>
+<td><strong>$0.35</strong></td>
+</tr>
+<tr>
+<td>Hot storage (7-day, post-profiling)</td>
+<td>$0.02</td>
+<td>$0.21</td>
+<td><strong>$1.03</strong></td>
+</tr>
+<tr>
+<td>Egress to central SIEM (3% shipped)</td>
+<td>$0.35</td>
+<td>$3.55</td>
+<td><strong>$17.73</strong></td>
+</tr>
+<tr>
+<td><strong>Total / node / month</strong></td>
+<td><strong>$0.38</strong></td>
+<td><strong>$3.83</strong></td>
+<td><strong>$19.11</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The headline cost finding:</strong> at every load level, <strong>egress dominates</strong> — at High
+load it is ~50× the compute cost. A 100-node cluster at High load is <strong>≈$1,912/month
+incremental, of which ~$1,773 is egress.</strong> This is the architectural argument for
+<strong>node-local profiling and aggregation before export</strong>: shipping raw normalized JSON
+(246 GB/node/day at High — the unprofiled upper bound) is untenable, but persisting
+only the profiled 3% makes the capability essentially free on compute and cheap on
+storage. The egress row assumes inter-region/SIEM shipping at GCP list rates;
+same-region or internet egress prices differ, but the ordering (egress ≫ storage ≫
+compute) is robust across realistic rates. Design decisions (what to persist, where to
+profile, whether to keep events node-local vs. centralize) should be driven by this
+number, not by the negligible decode cost.</p>
+<hr>
+<h2 id="timeline">Timeline</h2>
+<p>12-week LFX term (Sep 7 – Nov 27), scoped to complement in-flight contributions.</p>
+<table>
+<thead>
+<tr>
+<th>Weeks</th>
+<th>Milestone</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1–2</td>
+<td>Drive the opened framework PR (<a href="https://github.com/kubescape/regolibrary/pull/789" target="_blank" rel="noopener">regolibrary#789</a>, sequenced after the C-0301 renumber <a href="https://github.com/kubescape/regolibrary/pull/784" target="_blank" rel="noopener">#784</a>) and the design PR (<a href="https://github.com/kubescape/designs-and-proposals/pull/14" target="_blank" rel="noopener">designs-and-proposals#14</a>) through review — or park them until maintainers prefer, as with #761; reconcile the control set with #761; pin CRD fixtures (<code>extensions.agents.x-k8s.io/v1beta1</code>; <code>ate.dev/v1alpha1</code> behind a helper).</td>
+</tr>
+<tr>
+<td>3–5</td>
+<td>Part A complete for Agent Sandbox (1:1); Substrate per-object controls with N:1 documented; confirm ATLAS technique IDs with maintainers.</td>
+</tr>
+<tr>
+<td>6–8</td>
+<td>Part B into node-agent: wrap collector as a <code>containerwatcher</code> tracer gated on gVisor runtime class; translate to concrete event structs; seed attribution.</td>
+</tr>
+<tr>
+<td>9–10</td>
+<td>Session-contention: <code>Default</code>-ownership detection, host-boundary fallback, degraded-visibility posture finding; file the upstream gVisor multi-session issue.</td>
+</tr>
+<tr>
+<td>11–12</td>
+<td>Admission variant on the merged CEL/VAP plumbing; e2e on a real GKE Agent Sandbox cluster; docs, demo, remediation text.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="dependencies">Dependencies</h2>
+<ul>
+<li><strong>Internal:</strong> regolibrary (frameworks + controls), kubescape core (scan +
+  CEL/VAP admission; #3177/#3196/#3099 plumbing already merged), node-agent
+  (<code>containerwatcher</code>, Application Profile, reporters/rule engine), helm-charts (opt-in
+  RBAC for agent runtime posture, <a href="https://github.com/kubescape/helm-charts/pull/893" target="_blank" rel="noopener">helm-charts#893</a>).</li>
+<li><strong>External:</strong> gVisor <code>runsc</code> (<code>seccheck</code> remote sink, <code>runsc trace create</code>); Agent
+  Sandbox (<code>kubernetes-sigs/agent-sandbox</code>) and Agent Substrate
+  (<code>agent-substrate/substrate</code>) CRD schemas; GKE Agent Sandbox cluster for term-time
+  e2e; protobuf runtime.</li>
+</ul>
+<hr>
+<h2 id="alternatives-considered--prior-art">Alternatives Considered / Prior Art</h2>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Do nothing; wait for the runtime work</strong></td>
+<td>Rejected. Part A ships in a quarter and is useful immediately; it does not block on Part B.</td>
+</tr>
+<tr>
+<td><strong>Generic "AI security" checks on existing frameworks</strong></td>
+<td>Rejected. The agent CRDs have specific, checkable fields; vague checks don't survive review.</td>
+</tr>
+<tr>
+<td><strong><code>runsc --strace</code> / debug-log export</strong> (Part B)</td>
+<td>Dev-only. It's a text debug format, lossy under load, not a stable API.</td>
+</tr>
+<tr>
+<td><strong>Host-boundary signals only</strong> (Part B)</td>
+<td>Kept as the <em>fallback</em>, not the primary — always-available but coarse (no per-syscall detail).</td>
+</tr>
+<tr>
+<td><strong>seccheck remote sink</strong> (Part B)</td>
+<td><strong>Chosen primary.</strong> Structured, typed, dynamically attachable, cheap to consume — and proven by the PoC.</td>
+</tr>
+<tr>
+<td><strong>Falco's gVisor engine</strong></td>
+<td>Prior art, now <em>removed</em> (v0.44.0, May 2026) over trace-proto schema-stability burden — validating both the demand and the need to isolate the decode behind generated bindings.</td>
+</tr>
+<tr>
+<td><strong>gVisor <code>tracereplay</code></strong> (save/replay of remote-sink sessions)</td>
+<td>Prior art for generic replay — it exists upstream. <code>fakesentry</code> differs in what it <em>asserts</em>: the seccheck→node-agent <strong>normalization contract</strong> (wire message → decode → expected exec/network/open semantics), not protocol replay per se.</td>
+</tr>
+<tr>
+<td><strong>node-agent#894</strong> (seccheck design note)</td>
+<td>Identifies seccheck (remote sink, reference server, dynamic attach) and names the single-<code>Default</code>-session limit — note-only, no consumer code. This RFC's PoC is the executable version, and the contention/broker design is the operational answer to the limit #894 records.</td>
+</tr>
+<tr>
+<td><strong>regolibrary#761</strong> (broader <em>AgentRuntimeHardening</em> controls, Aug 4, draft)</td>
+<td>Prior art for Part A — parked at maintainer request to avoid LFX interference. This RFC's framework (<a href="https://github.com/kubescape/regolibrary/pull/789" target="_blank" rel="noopener">#789</a>) is the <em>minimal</em> wiring of already-merged controls; the term plan reconciles with #761's larger control set rather than duplicating it.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="operations">Operations</h2>
+<ul>
+<li><strong>Who runs it:</strong> the sensor ships as part of the node-agent DaemonSet; no new
+  standing human process. Rego controls run in existing scan/operator/admission paths.</li>
+<li><strong>Telemetry &amp; metrics to collect:</strong> per-node points-decoded / mapped / unmapped /
+  dropped (the collector already emits these), <code>Default</code>-session ownership state,
+  degraded-visibility node count, and the persisted-event ratio (the main cost driver).</li>
+<li><strong>Rollout:</strong> opt-in (a <code>--substrate</code>-style flag or a distinctly named bundle) so
+  clusters without Agent Sandbox/Substrate installed see zero-match no-ops rather than
+  noise or binary bloat; RBAC is opt-in per helm-charts#893.</li>
+<li><strong>New human process:</strong> maintainers confirm specific MITRE ATLAS technique IDs (left
+  unfabricated by design) and own the <code>ate.dev</code> field-path helper as the schema drifts.</li>
+</ul>
+<hr>
+<h2 id="security--privacy--compliance">Security / Privacy / Compliance</h2>
+<ul>
+<li><strong>Trust model.</strong> The seccheck signal is <em>Sentry-side</em>: it trusts the Sentry (the
+  isolation boundary), not the sandboxed workload. gVisor's own sink documentation
+  makes the collector's posture mandatory: <em>"the monitoring process must validate and
+  never trust input received from the Sentry because it can be controlled by a
+  malicious user. All fields must have hard coded size limits."</em> The collector
+  therefore: (1) enforces hard-coded per-field size caps; (2) tolerates unknown point
+  types and versions — the connect-time handshake negotiates compatibility, and
+  unknown protos are skipped and counted, never fatal; (3) accounts dropped messages
+  via the wire header's control fields, so shedding is observable; (4) isolates each
+  sandbox's connection with bounded per-connection buffers and shed-with-counters
+  backpressure, so one hostile or chatty actor cannot starve other sandboxes' streams
+  or block the Sentry.</li>
+<li><strong>Sensitive data.</strong> Recovered events can contain sensitive fields (argv, file paths,
+  destinations, and — if enabled — execve binary hashes). Binary hashing and full-argv
+  capture are <strong>opt-in</strong>; sensitive fields should be maskable consistent with any
+  PII-masking policy before persistence or export. No secrets are added to the data
+  model by Part A.</li>
+<li><strong>Compliance value.</strong> The framework's OWASP-LLM / ATLAS mapping and the
+  snapshot-encryption / credential-scoping controls are the evidence GRC teams need for
+  multi-tenant agent isolation (UC-3).</li>
+<li><strong>Least privilege.</strong> Agent-runtime RBAC is opt-in (helm-charts#893), scoped to the
+  agent CRD groups.</li>
+</ul>
+<hr>
+<h2 id="risks">Risks</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CRD schema drift</strong> (<code>ate.dev/v1alpha1</code> still moving — 37 commits since May)</td>
+<td>High</td>
+<td>Field access behind a thin helper updatable in one place; pin Sandbox against the more-stable v1beta1.</td>
+</tr>
+<tr>
+<td><strong>Trace-point proto instability</strong> (the reason Falco dropped gVisor)</td>
+<td>Med</td>
+<td>Generated bindings from vendored <code>.proto</code> with provenance; metric-server endpoint as a stable-but-coarse alternative; version the decode.</td>
+</tr>
+<tr>
+<td><strong><code>Default</code>-session contention with GKE-managed tooling</strong></td>
+<td>Med</td>
+<td>Detect + degrade + posture finding; needs a real GKE cluster to settle ownership policy (term-time).</td>
+</tr>
+<tr>
+<td><strong>Admission scope misunderstood</strong> (fires on defs, not spawns)</td>
+<td>Med</td>
+<td>Explicit control-description + remediation text; documented as a known boundary.</td>
+</tr>
+<tr>
+<td><strong>Competitive pre-emption</strong> (a vendor ships gVisor visibility first)</td>
+<td>Low-Med</td>
+<td>Open, upstream, CNCF-sensor-native, and already de-risked by the PoC.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="impact-on-cluster--node-agent-performance">Impact on cluster / node-agent performance</h3>
+<p>The added path is one out-of-band decode loop measured at <strong>~0.12% of an 8-vCPU
+node</strong> even at 7,500 events/s; it never blocks the actor's hot path. <strong>Measured before
+production</strong> via the <code>go test -bench</code> suite in the PoC and the per-node decode/drop
+counters. If overhead materializes (e.g., a misconfigured session enabling every
+syscall point), mitigations are: narrow the seccheck point set, sample, and cap the
+collector's CPU via the DaemonSet resource limits — the drop counter makes shedding
+observable rather than silent.</p>
+<hr>
+<h2 id="future-work">Future Work</h2>
+<ul>
+<li><strong>Graduated response</strong> (currently detection-only): network-policy soft-quarantine,
+  per-actor seccomp tightening, admission-time rejection — the "observe → baseline →
+  enforce" arc peers offer.</li>
+<li><strong>Cross-object ceiling ratios</strong> (per-actor vs <code>WorkerPool</code> capacity) once
+  multi-object scan batching supports it.</li>
+<li><strong>Live-actor enumeration</strong> from Substrate's side control plane for runtime
+  attribution beyond the CRD definitions.</li>
+<li><strong>Upstream gVisor multi-session support</strong>, removing the <code>Default</code> constraint at the
+  root.</li>
+<li><strong>Domain enrichment via existing DNS facilities.</strong> A <code>connect()</code> point carries only
+  the destination sockaddr (IP, port, address family) — not the hostname that led to
+  it. Domain attribution therefore comes from correlating gVisor network events with
+  DNS query/response telemetry and node-agent's existing DNS tracer +
+  <code>dnsmanager</code> address→domain cache, where that relationship is observable — not from
+  <code>connect()</code> alone. Query-level analytics (DGA entropy/length/frequency, DNS
+  exfiltration) additionally require the DNS points themselves.</li>
+<li><strong>Fold under CADR</strong>: land the sensor standalone (independently useful), reference it
+  from the broader CADR design.</li>
+</ul>
+<hr>
+<h2 id="audit-log">Audit Log</h2>
+<ul>
+<li><strong>New audit entries:</strong> admission decisions on agent CRDs (accept/reject/warn with the
+  failing control), and degraded-visibility events (a <code>Default</code> session could not be
+  acquired on node X) — both are security-relevant state changes worth an audit trail.</li>
+<li><strong>Existing audit logging:</strong> unaffected; Part A rides existing scan/admission audit
+  paths.</li>
+</ul>
+<hr>
+<h2 id="references">References</h2>
+<ul>
+<li>Issue: <a href="https://github.com/kubescape/kubescape/issues/2557" target="_blank" rel="noopener">kubescape#2557</a> · pinned CRD-identity comment: <a href="https://github.com/kubescape/kubescape/issues/2557#issuecomment-5314471897" target="_blank" rel="noopener">#issuecomment-5314471897</a></li>
+<li>Design proposal: <a href="https://github.com/kubescape/designs-and-proposals/pull/10" target="_blank" rel="noopener">designs-and-proposals#10</a> · LFX tracker: <a href="https://github.com/cncf/mentoring/issues/1991" target="_blank" rel="noopener">cncf/mentoring#1991</a></li>
+<li>Merged plumbing: <a href="https://github.com/kubescape/kubescape/pull/3177" target="_blank" rel="noopener">#3177</a>, <a href="https://github.com/kubescape/kubescape/pull/3196" target="_blank" rel="noopener">#3196</a>, <a href="https://github.com/kubescape/kubescape/pull/3099" target="_blank" rel="noopener">#3099</a> · regolibrary <a href="https://github.com/kubescape/regolibrary/pull/768" target="_blank" rel="noopener">#768</a>/<a href="https://github.com/kubescape/regolibrary/pull/778" target="_blank" rel="noopener">#778</a>/<a href="https://github.com/kubescape/regolibrary/pull/787" target="_blank" rel="noopener">#787</a>/<a href="https://github.com/kubescape/regolibrary/pull/784" target="_blank" rel="noopener">#784</a> · <a href="https://github.com/kubescape/helm-charts/pull/893" target="_blank" rel="noopener">helm-charts#893</a></li>
+<li>Adjacent prior art: <a href="https://github.com/kubescape/node-agent/issues/894" target="_blank" rel="noopener">node-agent#894</a> (seccheck note) · <a href="https://github.com/kubescape/regolibrary/pull/761" target="_blank" rel="noopener">regolibrary#761</a> (broader framework draft, parked) · this RFC's PRs: <a href="https://github.com/kubescape/regolibrary/pull/789" target="_blank" rel="noopener">regolibrary#789</a>, <a href="https://github.com/kubescape/designs-and-proposals/pull/14" target="_blank" rel="noopener">designs-and-proposals#14</a></li>
+<li>gVisor sink/trace internals: <a href="https://github.com/google/gvisor/blob/master/pkg/sentry/seccheck/README.md" target="_blank" rel="noopener">seccheck README</a> · <a href="https://github.com/google/gvisor/blob/master/pkg/sentry/seccheck/sinks/remote/README.md" target="_blank" rel="noopener">remote-sink README (untrusted-Sentry guidance)</a> · <a href="https://github.com/google/gvisor/tree/master/tools/tracereplay" target="_blank" rel="noopener">tools/tracereplay</a></li>
+<li>Upstream CRDs: <a href="https://github.com/kubernetes-sigs/agent-sandbox" target="_blank" rel="noopener">kubernetes-sigs/agent-sandbox</a> · <a href="https://github.com/agent-substrate/substrate" target="_blank" rel="noopener">agent-substrate/substrate</a> (#848, #835, #679)</li>
+<li>Google: <a href="https://cloud.google.com/blog/products/containers-kubernetes/bringing-you-agent-sandbox-on-gke-and-agent-substrate" target="_blank" rel="noopener">Agent Sandbox on GKE + Agent Substrate</a> · <a href="https://www.infoq.com/news/2026/05/gke-agent-sandbox-hypercluster/" target="_blank" rel="noopener">InfoQ coverage</a></li>
+<li>ARMO: <a href="https://www.armosec.io/blog/sandboxing-ai-agents-gke-workload-identity/" target="_blank" rel="noopener">Sandboxing AI Agents on GKE — where gVisor/WLI/VPC-SC stop working</a> · <a href="https://www.armosec.io/blog/best-threat-detection-response-solutions-2026/" target="_blank" rel="noopener">Best CADR solutions 2026</a></li>
+<li>gVisor: <a href="https://gvisor.dev/blog/2023/04/28/systrap-release/" target="_blank" rel="noopener">seccheck / systrap</a> · <a href="https://gvisor.dev/docs/user_guide/install/" target="_blank" rel="noopener">install</a></li>
+<li>OWASP Top 10 for LLM Applications 2025 · MITRE ATLAS</li>
+<li>Companion PoC &amp; benchmarks: <code>gvisor-visibility-poc</code> (E2E 8/8; <code>go test -bench</code> numbers in §Benchmarks) — public repository link to be added on publication</li>
+</ul>
+</main>
+<footer>
+Prepared for review by the Kubescape maintainers · upstream: kubescape#2557 · designs-and-proposals#10 / #14 · regolibrary#789 · cncf/mentoring#1991.
+Diagrams are inlined SVG; editable Excalidraw sources available on request.
+</footer>
+</div>
+</body>
+</html>
